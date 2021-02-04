@@ -14,6 +14,7 @@ struct widgets {
 	GtkWidget *button_prev;
 	GtkWidget *button_play;
 	GtkWidget *box_buttons;
+	GtkWidget *speed;
 	GtkWidget *header;
 } w;
 
@@ -25,6 +26,7 @@ struct gst {
 	GstElement *volume;
 	GstElement *conv;
 	GstElement *sink;
+	GstElement *speed;
 	GstBus *bus;
 } gst;
 
@@ -126,6 +128,7 @@ static void init_sound ( ) {
 	gst.volume = gst_element_factory_make ( "volume", NULL );
 	gst.conv = gst_element_factory_make ( "audioconvert", NULL );
 	gst.sink = gst_element_factory_make ( "autoaudiosink", NULL );
+	gst.speed = gst_element_factory_make ( "speed", NULL );
 
 	gst_bin_add_many ( GST_BIN ( gst.pipeline ),
 			gst.source,
@@ -133,11 +136,12 @@ static void init_sound ( ) {
 			gst.decoder,
 			gst.volume,
 			gst.conv,
+			gst.speed,
 			gst.sink,
 			NULL
 			);
 
-	gst_element_link_many ( gst.decoder, gst.volume, gst.conv, gst.sink, NULL );
+	gst_element_link_many ( gst.decoder, gst.volume, gst.conv, gst.speed, gst.sink, NULL );
 	gst_element_link ( gst.source, gst.demuxer );
 	g_signal_connect ( gst.demuxer, "pad-added", G_CALLBACK ( gst_demuxer_pad_added_cb ), NULL );
 
@@ -147,6 +151,12 @@ static void init_sound ( ) {
 	gst_bus_add_signal_watch ( gst.bus );
 
 	g_signal_connect ( gst.bus, "message", G_CALLBACK ( cb_message ), NULL );
+}
+GstEvent *event;
+
+static void change_speed_cb ( GtkRange *range, gpointer data ) {
+	double value = gtk_range_get_value ( range );
+	g_object_set ( G_OBJECT ( gst.speed ), "speed", value, NULL );
 }
 
 static void button_next_clicked_cb ( GtkButton *button, gpointer data ) {
@@ -171,6 +181,8 @@ static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 	gtk_container_add ( ( GtkContainer * ) w.window_main, w.box_main );
 	gtk_window_set_default_size ( ( GtkWindow * ) w.window_main, 500, 600 );
 	
+	init_sound ( );
+
 	create_actions ( );
 
 	GMenu *menu_app = g_menu_new ( );
@@ -196,6 +208,19 @@ static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 	gtk_widget_set_margin_end ( w.button_play, 32 );
 	gtk_widget_set_margin_bottom ( w.button_play, 32 );
 
+#if 1
+	GtkAdjustment *adj = gtk_adjustment_new ( 1.0, 0.1, 1.0, 1.0, 1.0, 0.0 );
+	w.speed = gtk_scale_new ( GTK_ORIENTATION_HORIZONTAL, adj );
+#else
+	w.speed = gtk_scale_new_with_range ( GTK_ORIENTATION_HORIZONTAL, 0.0, 1.0, 100.0 );
+#endif
+	gtk_scale_set_draw_value ( ( GtkScale * ) w.speed, FALSE );
+	g_signal_connect ( w.speed, "value-changed", G_CALLBACK ( change_speed_cb ), NULL );
+	gtk_widget_set_margin_start ( w.speed, 32 );
+	gtk_widget_set_margin_end ( w.speed, 32 );
+	gtk_widget_set_margin_bottom ( w.speed, 16 );
+	gtk_range_set_value ( ( GtkRange * ) w.speed, 1.0 );
+
 	w.button_next = gtk_button_new_with_label ( "Next" );
 	g_signal_connect ( w.button_next, "clicked", G_CALLBACK ( button_next_clicked_cb ), NULL );
 	w.button_prev = gtk_button_new_with_label ( "Prev" );
@@ -209,10 +234,10 @@ static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 	gtk_widget_set_margin_bottom ( w.box_buttons, 16 );
 
 	gtk_box_pack_start ( ( GtkBox * ) w.box_main, w.text_view_main, TRUE, TRUE, 0 );
+	gtk_box_pack_start ( ( GtkBox * ) w.box_main, w.speed, FALSE, FALSE, 0 );
 	gtk_box_pack_start ( ( GtkBox * ) w.box_main, w.button_play, FALSE, FALSE, 0 );
 	gtk_box_pack_end ( ( GtkBox * ) w.box_main, w.box_buttons, FALSE, FALSE, 0 );
 
-	init_sound ( );
 
 	gtk_widget_show_all ( w.window_main );
 }
